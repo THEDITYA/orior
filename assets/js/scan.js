@@ -1,0 +1,1 @@
+// Kosong, logika scan sudah di index.php inline. Bisa dipindah ke sini jika ingin modular.

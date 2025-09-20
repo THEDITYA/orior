@@ -1,0 +1,26 @@
+{
+  "name": "orior-qr-validation-system",
+  "version": "1.0.0",
+  "description": "Sistem Validasi Keaslian Barang dengan QR Code",
+  "main": "index.php",
+  "scripts": {
+    "dev": "vercel dev",
+    "build": "echo 'No build step needed for PHP'",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "qr-code",
+    "validation",
+    "php",
+    "vercel",
+    "product-authentication"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
+  "devDependencies": {
+    "@vercel/node": "^3.0.0"
+  },
+  "engines": {
+    "php": "8.2"
+  }
+}

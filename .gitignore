@@ -1,0 +1,44 @@
+# Vercel
+.vercel
+.env*
+!.env.example
+
+# Logs
+*.log
+logs/
+error.log
+
+# Temporary files
+tmp/
+temp/
+
+# Local development
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Node modules (if any)
+node_modules/
+
+# Local QR codes (development only)
+qrcodes/*.png
+qrcodes/*.svg
+qrcodes/*.jpg
+!qrcodes/.gitkeep
+
+# Database dumps
+*.sql
+!database_simple.sql
+
+# Vendor (composer)
+vendor/
+composer.lock
+
+# Local config
+config/local.php
+.htaccess.local

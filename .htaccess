@@ -1,0 +1,72 @@
+# Apache Configuration untuk Orior Validation System
+
+# Enable URL Rewriting
+RewriteEngine On
+
+# Security Headers
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set X-Content-Type-Options "nosniff" 
+Header always set X-XSS-Protection "1; mode=block"
+Header always set Referrer-Policy "strict-origin-when-cross-origin"
+Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com https://cdnjs.cloudflare.com https://unpkg.com https://chart.googleapis.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.tailwindcss.com; img-src 'self' data: https: chart.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com; connect-src 'self';"
+
+# Hide sensitive files
+<Files ~ "(\.env|\.git|composer\.(json|lock)|database\.sql|\.log)$">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Protect logs and lib directories (using Files instead of Directory for .htaccess)
+<Files "logs/*">
+    Order allow,deny
+    Deny from all
+</Files>
+
+<Files "lib/*">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Enable compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+</IfModule>
+
+# Cache static files
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/ico "access plus 1 year"
+    ExpiresByType image/icon "access plus 1 year"
+    ExpiresByType text/plain "access plus 1 month"
+    ExpiresByType application/pdf "access plus 1 month"
+</IfModule>
+
+# Friendly URLs (opsional)
+# RewriteRule ^scan/?$ public/index.php [L]
+# RewriteRule ^admin/?$ admin/login.php [L]
+
+# Error pages (opsional)
+# ErrorDocument 404 /error404.php
+# ErrorDocument 500 /error500.php
+
+# Prevent access to PHP files in uploads (using Files instead of Directory)
+<Files "uploads/*.php">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Rate limiting menggunakan mod_evasive (jika tersedia)
+<IfModule mod_evasive24.c>
+    DOSHashTableSize    16
+    DOSPageCount        3
+    DOSPageInterval     1
+    DOSSiteCount        50
+    DOSSiteInterval     1
+    DOSBlockingPeriod   600
+</IfModule>
