@@ -115,7 +115,34 @@ APP_DEBUG=false
 2. **Tunggu build** selesai (2-3 menit)
 3. **Access URL**: https://your-project-name.vercel.app
 
-## 🔧 Configuration Files
+## ⚙️ API Structure
+
+Aplikasi menggunakan struktur API Vercel yang benar:
+
+### � File Structure
+```
+/
+├── api/
+│   ├── index.php          # Main API router (serverless function)
+│   └── validate.php       # Legacy validation endpoint
+├── admin/                 # Admin panel files  
+│   ├── admin_login.php
+│   ├── admin_dashboard.php
+│   └── add_product.php
+├── config/                # Configuration files
+│   ├── database.php       # Database connection
+│   └── cloud-storage.php  # QR storage helpers
+├── index.php             # Main page
+├── scan.php              # QR Scanner
+├── validate.php          # Legacy validation (redirects to API)
+└── vercel.json           # Vercel configuration
+```
+
+### 🔗 API Endpoints
+- **Main API**: `/api/index.php?action=validate`
+- **Legacy**: `/validate.php` (redirects to API)
+- **System Info**: `/api/index.php?action=info`
+- **Admin Panel**: `/admin/admin_login.php`
 
 ### vercel.json
 ```json

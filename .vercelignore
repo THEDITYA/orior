@@ -1,0 +1,12 @@
+# Files to ignore during Vercel deployment
+node_modules/
+.env
+.env.local
+*.log
+vendor/
+qrcodes/*.png
+qrcodes/*.svg
+!qrcodes/.gitkeep
+test_*.php
+.DS_Store
+Thumbs.db
