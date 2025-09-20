@@ -38,7 +38,9 @@ function getDatabase() {
         try {
             $pdo = new PDO($dsn, $username, $password, $options);
         } catch (PDOException $e) {
-            throw new PDOException($e->getMessage(), (int)$e->getCode());
+            // Fallback to mock data if DB not available
+            error_log("Database connection failed: " . $e->getMessage());
+            return null; // Will use mock data
         }
     }
     
@@ -82,50 +84,73 @@ function handleValidation() {
     }
 
     // Get code from POST or GET
-    $kode = '';
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-        $kode = trim($_POST['kode'] ?? '');
-    } elseif ($_SERVER['REQUEST_METHOD'] === 'GET') {
-        $kode = trim($_GET['kode'] ?? '');
-    }
-    
-    if (empty($kode)) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    $qrData = $input['qr_data'] ?? $_POST['qr_data'] ?? $_GET['code'] ?? '';
+
+    if (empty($qrData)) {
         http_response_code(400);
         echo json_encode([
             'status' => 'error',
-            'message' => 'Kode produk tidak boleh kosong'
+            'message' => 'QR code data is required'
         ]);
         exit;
     }
 
+    // Mock validation if DB not available
+    if ($pdo === null) {
+        // Demo QR codes for testing
+        $mockProducts = [
+            'ORIOR_DEMO1' => ['name' => 'iPhone 15 Pro', 'category' => 'Elektronik'],
+            'ORIOR_DEMO2' => ['name' => 'Nike Air Max', 'category' => 'Fashion'],  
+            'ORIOR_DEMO3' => ['name' => 'Samsung Galaxy S24', 'category' => 'Elektronik'],
+        ];
+        
+        if (isset($mockProducts[$qrData])) {
+            echo json_encode([
+                'status' => 'success',
+                'valid' => true,
+                'message' => 'Product is valid (Demo Mode)',
+                'product' => $mockProducts[$qrData]
+            ]);
+        } else {
+            echo json_encode([
+                'status' => 'success', 
+                'valid' => false,
+                'message' => 'QR Code tidak terdaftar (Demo Mode). Try: ORIOR_DEMO1, ORIOR_DEMO2, ORIOR_DEMO3'
+            ]);
+        }
+        exit;
+    }
+
     try {
-        // Cari produk berdasarkan kode unik
-        $stmt = $pdo->prepare('SELECT * FROM products WHERE kode_unik = ? LIMIT 1');
-        $stmt->execute([$kode]);
+        // Real database validation
+        $stmt = $pdo->prepare('SELECT * FROM products WHERE qr_data = ? LIMIT 1');
+        $stmt->execute([$qrData]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);
 
         if ($product) {
-            // Produk ditemukan
             echo json_encode([
-                'status' => $product['status'], // 'ori' atau 'palsu'
-                'nama_barang' => $product['nama_barang'],
-                'kode_unik' => $product['kode_unik'],
-                'qrcode_path' => $product['qrcode_path'],
-                'created_at' => $product['created_at']
+                'status' => 'success',
+                'valid' => true,
+                'message' => 'Product is valid',
+                'product' => [
+                    'name' => $product['name'],
+                    'category' => $product['category'],
+                    'description' => $product['description']
+                ]
             ]);
         } else {
-            // Produk tidak ditemukan
-            http_response_code(404);
             echo json_encode([
-                'status' => 'notfound',
-                'message' => 'Kode produk tidak ditemukan dalam database'
+                'status' => 'success',
+                'valid' => false,
+                'message' => 'QR Code tidak terdaftar dalam sistem'
             ]);
         }
-    } catch (PDOException $e) {
+    } catch (Exception $e) {
         http_response_code(500);
         echo json_encode([
-            'status' => 'error',
-            'message' => 'Database error occurred'
+            'status' => 'error', 
+            'message' => 'Validation failed: ' . $e->getMessage()
         ]);
     }
 }
