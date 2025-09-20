@@ -30,16 +30,140 @@ function getDatabase() {
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
             PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+            PDO::ATTR_TIMEOUT => 5, // 5 second timeout
         ];
         
         try {
             $pdo = new PDO($dsn, $username, $password, $options);
         } catch (PDOException $e) {
+            // Log error and show setup instructions
+            error_log("Database connection failed: " . $e->getMessage());
+            
+            // For Vercel deployment without database, show setup instructions
+            if (strpos($_SERVER['HTTP_HOST'] ?? '', 'vercel.app') !== false || 
+                isset($_ENV['VERCEL']) || isset($_ENV['VERCEL_ENV'])) {
+                
+                showDatabaseSetupInstructions();
+                exit;
+            }
+            
             throw new PDOException("Database connection failed: " . $e->getMessage(), (int)$e->getCode());
         }
     }
     
     return $pdo;
+}
+
+function showDatabaseSetupInstructions() {
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Database Setup Required - Orior QR System</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gradient-to-br from-blue-500 to-purple-600 min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
+            <div class="text-center mb-8">
+                <div class="text-6xl mb-4">🗄️</div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Database Setup Required</h1>
+                <p class="text-gray-600">Your Orior QR Validation System needs a database connection.</p>
+            </div>
+            
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                <div class="flex">
+                    <div class="text-yellow-400 text-xl mr-3">⚠️</div>
+                    <div>
+                        <h3 class="text-yellow-800 font-semibold">Database Not Connected</h3>
+                        <p class="text-yellow-700 text-sm">Please set up your cloud database and environment variables.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🚀 Quick Setup Steps:</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-start">
+                            <span class="bg-blue-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">1</span>
+                            <div>
+                                <p class="font-medium">Create a MySQL Database</p>
+                                <p class="text-sm text-gray-600">Use PlanetScale, Railway, Aiven, or any MySQL cloud provider</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="bg-blue-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">2</span>
+                            <div>
+                                <p class="font-medium">Set Environment Variables in Vercel</p>
+                                <p class="text-sm text-gray-600">Add your database credentials to Vercel environment variables</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="bg-blue-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">3</span>
+                            <div>
+                                <p class="font-medium">Run Database Setup</p>
+                                <p class="text-sm text-gray-600">Execute the database setup script to create tables</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔧 Required Environment Variables:</h3>
+                    <div class="bg-gray-800 text-green-400 p-4 rounded-lg font-mono text-sm">
+                        <div>DB_HOST=your-database-host</div>
+                        <div>DB_NAME=validasi_barang</div>
+                        <div>DB_USER=your-username</div>
+                        <div>DB_PASSWORD=your-password</div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-blue-800 mb-4">🎯 Recommended Providers:</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="text-center">
+                            <div class="text-2xl mb-2">🪐</div>
+                            <h4 class="font-semibold">PlanetScale</h4>
+                            <p class="text-sm text-gray-600">Serverless MySQL</p>
+                            <a href="https://planetscale.com" target="_blank" class="text-blue-600 text-xs underline">planetscale.com</a>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl mb-2">🚂</div>
+                            <h4 class="font-semibold">Railway</h4>
+                            <p class="text-sm text-gray-600">Simple MySQL</p>
+                            <a href="https://railway.app" target="_blank" class="text-blue-600 text-xs underline">railway.app</a>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-2xl mb-2">☁️</div>
+                            <h4 class="font-semibold">Aiven</h4>
+                            <p class="text-sm text-gray-600">Managed MySQL</p>
+                            <a href="https://aiven.io" target="_blank" class="text-blue-600 text-xs underline">aiven.io</a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center pt-4">
+                    <p class="text-gray-500 text-sm">
+                        Need help? Check the setup guide in your repository or contact support.
+                    </p>
+                    <div class="mt-4 space-x-4">
+                        <a href="https://github.com/THEDITYA/orior" target="_blank" 
+                           class="inline-block bg-gray-800 text-white px-6 py-2 rounded-lg hover:bg-gray-700 transition">
+                            📖 View Repository
+                        </a>
+                        <button onclick="location.reload()" 
+                                class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                            🔄 Retry Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
 }
 
 // Get page parameter
