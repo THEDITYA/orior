@@ -1,0 +1,17 @@
+# Enable PHP processing
+AddType application/x-httpd-php .php
+
+# Set default index files
+DirectoryIndex index.php index.html
+
+# Enable rewrite engine
+RewriteEngine On
+
+# Security: Prevent access to sensitive files
+<Files "*.config">
+    Require all denied
+</Files>
+
+# Redirect root to public directory if needed
+# RewriteCond %{REQUEST_URI} !^/public/
+# RewriteRule ^(.*)$ /public/$1 [L]

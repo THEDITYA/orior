@@ -1,3 +1,6 @@
+<?php
+// Ensure this is recognized as a PHP file
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>

@@ -11,15 +11,19 @@
   "routes": [
     {
       "src": "/",
-      "dest": "/index.php"
+      "dest": "/api/pages.php?page=index"
     },
     {
       "src": "/scan",
-      "dest": "/scan.php"
+      "dest": "/api/pages.php?page=scan"
     },
     {
       "src": "/validate",
       "dest": "/api/index.php?action=validate"
+    },
+    {
+      "src": "/admin/(.*)",
+      "dest": "/api/pages.php?page=admin&subpage=$1"
     },
     {
       "src": "/api",
