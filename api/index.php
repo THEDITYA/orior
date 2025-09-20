@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Inline Database Configuration for Vercel
+// Database Configuration for Production
 function getDatabase() {
     static $pdo = null;
     
@@ -38,9 +38,7 @@ function getDatabase() {
         try {
             $pdo = new PDO($dsn, $username, $password, $options);
         } catch (PDOException $e) {
-            // Fallback to mock data if DB not available
-            error_log("Database connection failed: " . $e->getMessage());
-            return null; // Will use mock data
+            throw new PDOException("Database connection failed: " . $e->getMessage(), (int)$e->getCode());
         }
     }
     
@@ -71,14 +69,14 @@ switch ($action) {
 }
 
 function handleValidation() {
-    // Database connection - inline for Vercel
+    // Database connection - Production mode
     try {
         $pdo = getDatabase();
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode([
             'status' => 'error',
-            'message' => 'Database connection failed'
+            'message' => 'Database connection failed: ' . $e->getMessage()
         ]);
         exit;
     }
@@ -96,34 +94,8 @@ function handleValidation() {
         exit;
     }
 
-    // Mock validation if DB not available
-    if ($pdo === null) {
-        // Demo QR codes for testing
-        $mockProducts = [
-            'ORIOR_DEMO1' => ['name' => 'iPhone 15 Pro', 'category' => 'Elektronik'],
-            'ORIOR_DEMO2' => ['name' => 'Nike Air Max', 'category' => 'Fashion'],  
-            'ORIOR_DEMO3' => ['name' => 'Samsung Galaxy S24', 'category' => 'Elektronik'],
-        ];
-        
-        if (isset($mockProducts[$qrData])) {
-            echo json_encode([
-                'status' => 'success',
-                'valid' => true,
-                'message' => 'Product is valid (Demo Mode)',
-                'product' => $mockProducts[$qrData]
-            ]);
-        } else {
-            echo json_encode([
-                'status' => 'success', 
-                'valid' => false,
-                'message' => 'QR Code tidak terdaftar (Demo Mode). Try: ORIOR_DEMO1, ORIOR_DEMO2, ORIOR_DEMO3'
-            ]);
-        }
-        exit;
-    }
-
     try {
-        // Real database validation
+        // Database validation
         $stmt = $pdo->prepare('SELECT * FROM products WHERE qr_data = ? LIMIT 1');
         $stmt->execute([$qrData]);
         $product = $stmt->fetch(PDO::FETCH_ASSOC);

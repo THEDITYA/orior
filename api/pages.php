@@ -11,7 +11,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Inline Database Configuration for Vercel
+// Database Configuration for Production
 function getDatabase() {
     static $pdo = null;
     
@@ -35,9 +35,7 @@ function getDatabase() {
         try {
             $pdo = new PDO($dsn, $username, $password, $options);
         } catch (PDOException $e) {
-            // Fallback to mock data if DB not available
-            error_log("Database connection failed: " . $e->getMessage());
-            return null; // Will use mock data
+            throw new PDOException("Database connection failed: " . $e->getMessage(), (int)$e->getCode());
         }
     }
     
@@ -113,7 +111,7 @@ function renderScanPage() {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QR Scanner - Validasi Barang</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="/assets/js/html5-qrcode.min.js"></script>
     <style>
         .scanner-container { 
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -528,7 +526,7 @@ function renderAdminPage($subpage) {
 function renderAdminLogin() {
     session_start();
 
-    // Database connection - Vercel compatible (inline)
+    // Database connection - Production mode
     $pdo = getDatabase();
 
     // Check if already logged in
@@ -544,35 +542,22 @@ function renderAdminLogin() {
         $password = $_POST['password'] ?? '';
         
         if ($username && $password) {
-            // Mock validation if DB not available
-            if ($pdo === null) {
-                // Demo credentials
-                if ($username === 'admin' && $password === 'admin123') {
-                    $_SESSION['admin_id'] = 1;
-                    $_SESSION['admin_username'] = $username;
+            try {
+                // Check user credentials
+                $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ? LIMIT 1');
+                $stmt->execute([$username]);
+                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($user && password_verify($password, $user['password_hash'])) {
+                    $_SESSION['admin_id'] = $user['id'];
+                    $_SESSION['admin_username'] = $user['username'];
                     header('Location: /admin/admin_dashboard.php');
                     exit;
                 } else {
-                    $error = 'Username atau password salah! (Demo: admin/admin123)';
+                    $error = 'Username atau password salah!';
                 }
-            } else {
-                // Real DB validation
-                try {
-                    $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ? LIMIT 1');
-                    $stmt->execute([$username]);
-                    $user = $stmt->fetch(PDO::FETCH_ASSOC);
-                    
-                    if ($user && password_verify($password, $user['password_hash'])) {
-                        $_SESSION['admin_id'] = $user['id'];
-                        $_SESSION['admin_username'] = $user['username'];
-                        header('Location: /admin/admin_dashboard.php');
-                        exit;
-                    } else {
-                        $error = 'Username atau password salah!';
-                    }
-                } catch (Exception $e) {
-                    $error = 'Error database: ' . $e->getMessage();
-                }
+            } catch (Exception $e) {
+                $error = 'Error database: ' . $e->getMessage();
             }
         } else {
             $error = 'Username dan password harus diisi!';
@@ -647,50 +632,23 @@ function renderAdminDashboard() {
         exit;
     }
 
-    // Database connection - Vercel compatible (inline)
+    // Database connection - Production mode
     $pdo = getDatabase();
 
-    // Mock data if DB not available
-    if ($pdo === null) {
-        $productCount = 3; // Mock count
-        $recentProducts = [
-            [
-                'id' => 1,
-                'name' => 'iPhone 15 Pro (Demo)',
-                'category' => 'Elektronik',
-                'qr_data' => 'ORIOR_DEMO1',
-                'created_at' => date('Y-m-d H:i:s', time() - 3600)
-            ],
-            [
-                'id' => 2,
-                'name' => 'Nike Air Max (Demo)',
-                'category' => 'Fashion',
-                'qr_data' => 'ORIOR_DEMO2',
-                'created_at' => date('Y-m-d H:i:s', time() - 7200)
-            ],
-            [
-                'id' => 3,
-                'name' => 'Samsung Galaxy S24 (Demo)',
-                'category' => 'Elektronik',
-                'qr_data' => 'ORIOR_DEMO3',
-                'created_at' => date('Y-m-d H:i:s', time() - 10800)
-            ]
-        ];
-    } else {
-        // Real database queries
-        try {
-            $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
-            $stmt->execute();
-            $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    try {
+        // Get products count
+        $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
+        $stmt->execute();
+        $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-            $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
-            $stmt->execute();
-            $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } catch (Exception $e) {
-            // Fallback to mock data on error
-            $productCount = 0;
-            $recentProducts = [];
-        }
+        // Get recent products
+        $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
+        $stmt->execute();
+        $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Exception $e) {
+        $productCount = 0;
+        $recentProducts = [];
+        $dbError = 'Error mengambil data: ' . $e->getMessage();
     }
 ?>
 <!DOCTYPE html>
@@ -704,12 +662,7 @@ function renderAdminDashboard() {
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-bold">📊 Dashboard Admin</h1>
-                <?php if ($pdo === null): ?>
-                <span class="bg-yellow-500 text-yellow-900 px-2 py-1 rounded text-xs font-bold">DEMO MODE</span>
-                <?php endif; ?>
-            </div>
+            <h1 class="text-xl font-bold">📊 Dashboard Admin</h1>
             <div class="space-x-4">
                 <span>Welcome, <?= htmlspecialchars($_SESSION['admin_username']) ?>!</span>
                 <a href="?logout=1" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600">Logout</a>
@@ -822,7 +775,7 @@ function renderAddProduct() {
         exit;
     }
 
-    // Database connection - Vercel compatible (inline)
+    // Database connection - Production mode
     $pdo = getDatabase();
 
     $success = '';
@@ -837,10 +790,14 @@ function renderAddProduct() {
             // Generate unique QR data
             $qrData = 'ORIOR_' . strtoupper(uniqid()) . '_' . time();
             
-            if ($pdo === null) {
-                // Demo mode - generate QR code for display
+            try {
+                // Insert into database
+                $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$name, $category, $description, $qrData]);
+                
+                // Generate QR code URL
                 $qrCodeUrl = "https://qr-server.com/api/v1/create-qr-code/?size=200x200&data=" . urlencode($qrData);
-                $success = 'Produk berhasil ditambahkan! (Demo Mode - tidak tersimpan ke database)';
+                $success = 'Produk berhasil ditambahkan dan tersimpan ke database!';
                 $generatedQR = [
                     'qr_data' => $qrData,
                     'qr_url' => $qrCodeUrl,
@@ -848,30 +805,11 @@ function renderAddProduct() {
                     'category' => $category,
                     'description' => $description
                 ];
+                
                 // Clear form
                 $name = $category = $description = '';
-            } else {
-                // Real database insert
-                try {
-                    $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
-                    $stmt->execute([$name, $category, $description, $qrData]);
-                    
-                    // Generate QR code URL
-                    $qrCodeUrl = "https://qr-server.com/api/v1/create-qr-code/?size=200x200&data=" . urlencode($qrData);
-                    $success = 'Produk berhasil ditambahkan dan tersimpan ke database!';
-                    $generatedQR = [
-                        'qr_data' => $qrData,
-                        'qr_url' => $qrCodeUrl,
-                        'name' => $name,
-                        'category' => $category,
-                        'description' => $description
-                    ];
-                    
-                    // Clear form
-                    $name = $category = $description = '';
-                } catch (Exception $e) {
-                    $error = 'Terjadi kesalahan: ' . $e->getMessage();
-                }
+            } catch (Exception $e) {
+                $error = 'Terjadi kesalahan: ' . $e->getMessage();
             }
         } else {
             $error = 'Nama produk dan kategori harus diisi!';
@@ -889,12 +827,7 @@ function renderAddProduct() {
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <div class="flex items-center space-x-3">
-                <h1 class="text-xl font-bold">📦 Tambah Produk</h1>
-                <?php if ($pdo === null): ?>
-                <span class="bg-yellow-500 text-yellow-900 px-2 py-1 rounded text-xs font-bold">DEMO MODE</span>
-                <?php endif; ?>
-            </div>
+            <h1 class="text-xl font-bold">📦 Tambah Produk</h1>
             <div class="space-x-4">
                 <a href="/admin/admin_dashboard.php" class="hover:underline">← Dashboard</a>
                 <span><?= htmlspecialchars($_SESSION['admin_username']) ?></span>
@@ -913,9 +846,7 @@ function renderAddProduct() {
                             <p><strong>Nama:</strong> <?= htmlspecialchars($generatedQR['name']) ?></p>
                             <p><strong>Kategori:</strong> <?= htmlspecialchars($generatedQR['category']) ?></p>
                             <p><strong>QR Code:</strong> <span class="font-mono"><?= htmlspecialchars($generatedQR['qr_data']) ?></span></p>
-                            <?php if ($pdo === null): ?>
-                            <p class="text-yellow-600 font-semibold mt-2">⚠️ Demo Mode: Data tidak tersimpan</p>
-                            <?php endif; ?>
+                            <p class="text-green-600 font-semibold mt-2">✅ Tersimpan ke database</p>
                         </div>
                         <div class="text-center">
                             <img src="<?= htmlspecialchars($generatedQR['qr_url']) ?>" 
