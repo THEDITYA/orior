@@ -1,7 +1,25 @@
 # 🚀 Deploy Orior QR Validation System ke Vercel
 
-Panduan lengkap untuk deploy sistem validasi QR code ke Vercel dengan database cloud.
-
+Panduan lengkap untuk deploy sistem validasi QR code ke Vercel dengan### 📁 File Structure
+```
+/
+├── public/                # Static files & pages (Vercel output)
+│   ├── index.php         # Main landing page
+│   ├── scan.php          # QR scanner interface
+│   ├── validate.php      # Legacy validation (redirects to API)
+│   ├── admin/            # Admin panel files  
+│   │   ├── admin_login.php
+│   │   ├── admin_dashboard.php
+│   │   └── add_product.php
+│   └── assets/           # CSS, JS, images
+├── api/                   # Serverless functions
+│   ├── index.php         # Main API router
+│   └── validate.php      # Legacy validation endpoint
+├── config/               # Configuration files (secure, outside public)
+│   ├── database.php      # Database connection
+│   └── cloud-storage.php # QR storage helpers
+└── vercel.json           # Vercel configuration
+```
 ## 📋 Prerequisites
 
 - [x] Account Vercel (gratis di [vercel.com](https://vercel.com))
