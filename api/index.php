@@ -14,35 +14,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
-// Database Configuration for Production
+// MongoDB Configuration for Production
 function getDatabase() {
-    static $pdo = null;
+    static $mongodb = null;
     
-    if ($pdo === null) {
-        // Environment variables dengan fallback ke nilai lokal
-        $host = $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: 'localhost';
+    if ($mongodb === null) {
+        // MongoDB Atlas connection string
+        $mongoUri = $_ENV['MONGODB_URI'] ?? getenv('MONGODB_URI') ?: 
+            'mongodb+srv://admin:admin123@cluster0.8azrv7a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+        
+        // Database name
         $dbname = $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?: 'validasi_barang';
-        $username = $_ENV['DB_USER'] ?? getenv('DB_USER') ?: 'root';
-        $password = $_ENV['DB_PASSWORD'] ?? getenv('DB_PASSWORD') ?: '';
-        
-        $charset = 'utf8mb4';
-        $dsn = "mysql:host={$host};dbname={$dbname};charset={$charset}";
-        
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-            PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
-        ];
         
         try {
-            $pdo = new PDO($dsn, $username, $password, $options);
-        } catch (PDOException $e) {
-            throw new PDOException("Database connection failed: " . $e->getMessage(), (int)$e->getCode());
+            // Check if MongoDB extension is available
+            if (!extension_loaded('mongodb')) {
+                throw new Exception("MongoDB extension not available");
+            }
+            
+            $client = new MongoDB\Client($mongoUri, [
+                'serverSelectionTimeoutMS' => 5000,
+                'connectTimeoutMS' => 10000,
+            ]);
+            
+            $mongodb = $client->selectDatabase($dbname);
+            
+            // Test connection
+            $mongodb->command(['ping' => 1]);
+            
+        } catch (Exception $e) {
+            throw new Exception("MongoDB connection failed: " . $e->getMessage());
         }
     }
     
-    return $pdo;
+    return $mongodb;
+}
+
+// MongoDB Helper Functions
+function findDocument($collection, $filter = [], $options = []) {
+    $db = getDatabase();
+    return $db->selectCollection($collection)->findOne($filter, $options);
 }
 
 // Handle preflight requests
@@ -69,9 +80,9 @@ switch ($action) {
 }
 
 function handleValidation() {
-    // Database connection - Production mode
+    // MongoDB connection - Production mode
     try {
-        $pdo = getDatabase();
+        $db = getDatabase();
     } catch (Exception $e) {
         http_response_code(500);
         echo json_encode([
@@ -95,10 +106,13 @@ function handleValidation() {
     }
 
     try {
-        // Database validation
-        $stmt = $pdo->prepare('SELECT * FROM products WHERE qr_data = ? LIMIT 1');
-        $stmt->execute([$qrData]);
-        $product = $stmt->fetch(PDO::FETCH_ASSOC);
+        // MongoDB validation - search by code or qr_code
+        $product = findDocument('products', [
+            '$or' => [
+                ['code' => $qrData],
+                ['qr_code' => new MongoDB\BSON\Regex($qrData, 'i')]
+            ]
+        ]);
 
         if ($product) {
             echo json_encode([
@@ -106,8 +120,9 @@ function handleValidation() {
                 'valid' => true,
                 'message' => 'Product is valid',
                 'product' => [
+                    'id' => (string)$product['_id'],
                     'name' => $product['name'],
-                    'category' => $product['category'],
+                    'code' => $product['code'],
                     'description' => $product['description']
                 ]
             ]);
@@ -117,6 +132,7 @@ function handleValidation() {
                 'valid' => false,
                 'message' => 'QR Code tidak terdaftar dalam sistem'
             ]);
+        }
         }
     } catch (Exception $e) {
         http_response_code(500);

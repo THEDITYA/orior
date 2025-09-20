@@ -1,114 +1,95 @@
 <?php
 /**
- * Cloud Database Setup Script
- * Script untuk setup database di cloud provider (PlanetScale, Railway, Aiven, dll)
+ * MongoDB Atlas Setup Script
+ * Script untuk setup MongoDB Atlas dan inisialisasi collections
  * 
  * Usage:
- * 1. Set environment variables untuk koneksi database
+ * 1. Set environment variables untuk koneksi MongoDB
  * 2. Run: php cloud_setup.php
  * 
  * Environment Variables Required:
- * - DB_HOST: Database host
- * - DB_NAME: Database name
- * - DB_USER: Database username  
- * - DB_PASSWORD: Database password
+ * - MONGODB_URI: MongoDB connection string
+ * - DB_NAME: Database name (default: validasi_barang)
  */
 
-echo "🚀 Orior QR System - Cloud Database Setup\n";
-echo "========================================\n\n";
+echo "🍃 Orior QR System - MongoDB Atlas Setup\n";
+echo "======================================\n\n";
 
 // Check if running in CLI
 if (php_sapi_name() !== 'cli') {
     die("⚠️  This script must be run from command line\n");
 }
 
-// Get database credentials from environment variables
-$host = getenv('DB_HOST') ?: readline("DB Host: ");
-$dbname = getenv('DB_NAME') ?: readline("DB Name (default: validasi_barang): ") ?: 'validasi_barang';
-$username = getenv('DB_USER') ?: readline("DB User: ");
-$password = getenv('DB_PASSWORD') ?: readline("DB Password: ");
-
-if (empty($host) || empty($username)) {
-    die("❌ Database host and username are required\n");
+// Check if MongoDB extension is loaded
+if (!extension_loaded('mongodb')) {
+    die("❌ MongoDB PHP extension is not installed.\n" .
+        "Install with: composer require mongodb/mongodb\n" .
+        "Or: pecl install mongodb\n");
 }
 
-echo "\n📡 Testing database connection...\n";
+// Get database credentials from environment variables
+$mongoUri = getenv('MONGODB_URI') ?: readline("MongoDB URI: ");
+$dbname = getenv('DB_NAME') ?: readline("DB Name (default: validasi_barang): ") ?: 'validasi_barang';
+
+if (empty($mongoUri)) {
+    die("❌ MongoDB URI is required\n");
+}
+
+echo "\n🔗 Testing MongoDB connection...\n";
 
 try {
-    $dsn = "mysql:host={$host};charset=utf8mb4";
-    $pdo = new PDO($dsn, $username, $password, [
-        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-        PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
-        PDO::ATTR_TIMEOUT => 10,
+    $client = new MongoDB\Client($mongoUri, [
+        'serverSelectionTimeoutMS' => 5000,
+        'connectTimeoutMS' => 10000,
     ]);
     
-    echo "✅ Connected to database server\n";
+    // Test connection
+    $client->listDatabases();
+    echo "✅ Connected to MongoDB Atlas\n";
     
-    // Create database if not exists
-    echo "📦 Creating database if not exists...\n";
-    $pdo->exec("CREATE DATABASE IF NOT EXISTS `{$dbname}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-    echo "✅ Database '{$dbname}' ready\n";
+    // Select database
+    $db = $client->selectDatabase($dbname);
+    echo "✅ Using database: {$dbname}\n";
     
-    // Connect to specific database
-    $pdo->exec("USE `{$dbname}`");
+    echo "\n📂 Setting up collections...\n";
     
-    echo "\n🏗️  Creating tables...\n";
+    // Create users collection with indexes
+    echo "👤 Setting up users collection...\n";
+    $usersCollection = $db->selectCollection('users');
     
-    // Create users table
-    $createUsers = "
-        CREATE TABLE IF NOT EXISTS users (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            username VARCHAR(255) UNIQUE NOT NULL,
-            password VARCHAR(255) NOT NULL,
-            email VARCHAR(255),
-            role VARCHAR(50) DEFAULT 'admin',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_username (username)
-        ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-    ";
+    // Create unique index on username
+    $usersCollection->createIndex(['username' => 1], ['unique' => true]);
+    echo "✅ Users collection indexed\n";
     
-    $pdo->exec($createUsers);
-    echo "✅ Users table created\n";
+    // Check if admin user exists
+    $existingAdmin = $usersCollection->findOne(['username' => 'admin']);
     
-    // Create products table
-    $createProducts = "
-        CREATE TABLE IF NOT EXISTS products (
-            id INT AUTO_INCREMENT PRIMARY KEY,
-            name VARCHAR(255) NOT NULL,
-            code VARCHAR(100) UNIQUE NOT NULL,
-            description TEXT,
-            qr_code TEXT,
-            status ENUM('active', 'inactive') DEFAULT 'active',
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            INDEX idx_code (code),
-            INDEX idx_status (status)
-        ) ENGINE=InnoDB CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci
-    ";
-    
-    $pdo->exec($createProducts);
-    echo "✅ Products table created\n";
-    
-    echo "\n👤 Setting up admin user...\n";
-    
-    // Check if admin already exists
-    $checkAdmin = $pdo->prepare("SELECT COUNT(*) FROM users WHERE username = ?");
-    $checkAdmin->execute(['admin']);
-    
-    if ($checkAdmin->fetchColumn() == 0) {
-        // Create admin user (password: admin123)
+    if (!$existingAdmin) {
+        // Create admin user
         $adminPassword = password_hash('admin123', PASSWORD_DEFAULT);
-        $insertAdmin = $pdo->prepare("
-            INSERT INTO users (username, password, email, role) 
-            VALUES (?, ?, ?, ?)
-        ");
-        $insertAdmin->execute(['admin', $adminPassword, 'admin@orior.local', 'admin']);
-        echo "✅ Admin user created (username: admin, password: admin123)\n";
+        $adminUser = [
+            'username' => 'admin',
+            'password' => $adminPassword,
+            'email' => 'admin@orior.local',
+            'role' => 'admin',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
+        ];
+        
+        $result = $usersCollection->insertOne($adminUser);
+        echo "✅ Admin user created (ID: " . $result->getInsertedId() . ")\n";
     } else {
         echo "ℹ️  Admin user already exists\n";
     }
     
-    echo "\n📦 Adding sample products...\n";
+    // Create products collection with indexes
+    echo "\n📦 Setting up products collection...\n";
+    $productsCollection = $db->selectCollection('products');
+    
+    // Create indexes
+    $productsCollection->createIndex(['code' => 1], ['unique' => true]);
+    $productsCollection->createIndex(['status' => 1]);
+    $productsCollection->createIndex(['created_at' => -1]);
+    echo "✅ Products collection indexed\n";
     
     // Sample products data
     $sampleProducts = [
@@ -116,85 +97,107 @@ try {
             'name' => 'Laptop Dell XPS 13',
             'code' => 'LPT001',
             'description' => 'Ultrabook premium dengan prosesor Intel i7 dan RAM 16GB',
+            'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=LPT001',
+            'status' => 'active',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
         ],
         [
             'name' => 'Mouse Wireless Logitech MX Master 3',
-            'code' => 'MSE002',
+            'code' => 'MSE002', 
             'description' => 'Mouse nirkabel dengan sensor presisi tinggi dan baterai tahan lama',
+            'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=MSE002',
+            'status' => 'active',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
         ],
         [
             'name' => 'Keyboard Mechanical RGB',
             'code' => 'KBD003',
             'description' => 'Keyboard mekanik dengan switch Cherry MX dan backlight RGB',
+            'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=KBD003',
+            'status' => 'active',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
         ],
         [
             'name' => 'Monitor 4K Samsung',
             'code' => 'MON004',
             'description' => 'Monitor 27 inci dengan resolusi 4K dan teknologi HDR',
+            'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=MON004',
+            'status' => 'active',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
         ],
         [
             'name' => 'Webcam Logitech C920',
             'code' => 'WBC005',
             'description' => 'Webcam HD dengan autofocus dan mikrofon noise reduction',
+            'qr_code' => 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=WBC005',
+            'status' => 'active',
+            'created_at' => new MongoDB\BSON\UTCDateTime()
         ]
     ];
     
-    $insertProduct = $pdo->prepare("
-        INSERT IGNORE INTO products (name, code, description, qr_code) 
-        VALUES (?, ?, ?, ?)
-    ");
+    echo "📦 Adding sample products...\n";
+    $insertedCount = 0;
     
     foreach ($sampleProducts as $product) {
-        $qrCode = "https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=" . urlencode($product['code']);
-        $insertProduct->execute([
-            $product['name'],
-            $product['code'],
-            $product['description'],
-            $qrCode
-        ]);
+        try {
+            // Check if product already exists
+            $existing = $productsCollection->findOne(['code' => $product['code']]);
+            if (!$existing) {
+                $productsCollection->insertOne($product);
+                $insertedCount++;
+                echo "✅ Added: " . $product['name'] . "\n";
+            } else {
+                echo "ℹ️  Exists: " . $product['name'] . "\n";
+            }
+        } catch (MongoDB\Driver\Exception\BulkWriteException $e) {
+            echo "⚠️  Skipped: " . $product['name'] . " (duplicate)\n";
+        }
     }
     
-    echo "✅ Sample products added\n";
+    echo "✅ {$insertedCount} new products added\n";
     
     // Verify setup
     echo "\n🔍 Verifying setup...\n";
     
-    $userCount = $pdo->query("SELECT COUNT(*) FROM users")->fetchColumn();
-    $productCount = $pdo->query("SELECT COUNT(*) FROM products")->fetchColumn();
+    $userCount = $usersCollection->countDocuments([]);
+    $productCount = $productsCollection->countDocuments([]);
     
     echo "✅ Users: {$userCount}\n";
     echo "✅ Products: {$productCount}\n";
     
-    echo "\n🎉 Cloud database setup completed successfully!\n\n";
+    echo "\n🎉 MongoDB Atlas setup completed successfully!\n\n";
     
     echo "📋 Summary:\n";
     echo "- Database: {$dbname}\n";
-    echo "- Host: {$host}\n";
-    echo "- Users table: ✅\n";
-    echo "- Products table: ✅\n";
+    echo "- Collections: users, products\n"; 
+    echo "- Users collection: ✅ (with indexes)\n";
+    echo "- Products collection: ✅ (with indexes)\n";
     echo "- Admin user: admin / admin123\n";
     echo "- Sample products: {$productCount} items\n\n";
     
-    echo "🔗 Next steps:\n";
+    echo "🔗 Next steps for Vercel deployment:\n";
     echo "1. Set environment variables in Vercel:\n";
-    echo "   DB_HOST={$host}\n";
-    echo "   DB_NAME={$dbname}\n";
-    echo "   DB_USER={$username}\n";
-    echo "   DB_PASSWORD=****** (your password)\n\n";
+    echo "   MONGODB_URI={$mongoUri}\n";
+    echo "   DB_NAME={$dbname}\n\n";
     echo "2. Deploy to Vercel: git push origin main\n";
     echo "3. Test your application at your-app.vercel.app\n\n";
     
     echo "⚠️  Remember to change the default admin password!\n";
+    echo "🔒 Whitelist Vercel IPs in MongoDB Atlas Network Access if needed\n";
     
-} catch (PDOException $e) {
-    echo "❌ Database error: " . $e->getMessage() . "\n";
+} catch (MongoDB\Driver\Exception\Exception $e) {
+    echo "❌ MongoDB error: " . $e->getMessage() . "\n";
     echo "\n🔧 Troubleshooting:\n";
-    echo "1. Check your database credentials\n";
-    echo "2. Ensure database server is running\n";
-    echo "3. Verify network connectivity\n";
-    echo "4. Check firewall settings\n\n";
+    echo "1. Check your MongoDB connection string\n";
+    echo "2. Ensure network access is configured in Atlas\n";
+    echo "3. Verify database user permissions\n";
+    echo "4. Check if IP whitelist includes your current IP\n\n";
     exit(1);
 } catch (Exception $e) {
     echo "❌ Error: " . $e->getMessage() . "\n";
+    echo "\n💡 Common issues:\n";
+    echo "- MongoDB extension not installed: composer require mongodb/mongodb\n";
+    echo "- Connection timeout: check network/firewall\n";
+    echo "- Authentication failed: verify username/password\n\n";
     exit(1);
 }

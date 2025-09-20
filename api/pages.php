@@ -11,47 +11,186 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
-// Database Configuration for Production
+// MongoDB Configuration for Production
 function getDatabase() {
-    static $pdo = null;
+    static $mongodb = null;
     
-    if ($pdo === null) {
-        // Environment variables dengan fallback ke nilai lokal
-        $host = $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: 'localhost';
+    if ($mongodb === null) {
+        // MongoDB Atlas connection string
+        $mongoUri = $_ENV['MONGODB_URI'] ?? getenv('MONGODB_URI') ?: 
+            'mongodb+srv://admin:admin123@cluster0.8azrv7a.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+        
+        // Database name
         $dbname = $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?: 'validasi_barang';
-        $username = $_ENV['DB_USER'] ?? getenv('DB_USER') ?: 'root';
-        $password = $_ENV['DB_PASSWORD'] ?? getenv('DB_PASSWORD') ?: '';
-        
-        $charset = 'utf8mb4';
-        $dsn = "mysql:host={$host};dbname={$dbname};charset={$charset}";
-        
-        $options = [
-            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
-            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-            PDO::ATTR_EMULATE_PREPARES   => false,
-            PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
-            PDO::ATTR_TIMEOUT => 5, // 5 second timeout
-        ];
         
         try {
-            $pdo = new PDO($dsn, $username, $password, $options);
-        } catch (PDOException $e) {
-            // Log error and show setup instructions
-            error_log("Database connection failed: " . $e->getMessage());
+            // Check if MongoDB extension is available
+            if (!extension_loaded('mongodb')) {
+                throw new Exception("MongoDB extension not available. Using simple HTTP client fallback.");
+            }
             
-            // For Vercel deployment without database, show setup instructions
+            $client = new MongoDB\Client($mongoUri, [
+                'serverSelectionTimeoutMS' => 5000, // 5 second timeout
+                'connectTimeoutMS' => 10000,
+                'socketTimeoutMS' => 5000,
+            ]);
+            
+            $mongodb = $client->selectDatabase($dbname);
+            
+            // Test connection
+            $mongodb->command(['ping' => 1]);
+            
+        } catch (Exception $e) {
+            error_log("MongoDB connection failed: " . $e->getMessage());
+            
+            // For Vercel deployment without MongoDB, show setup instructions
             if (strpos($_SERVER['HTTP_HOST'] ?? '', 'vercel.app') !== false || 
                 isset($_ENV['VERCEL']) || isset($_ENV['VERCEL_ENV'])) {
                 
-                showDatabaseSetupInstructions();
+                showMongoDBSetupInstructions();
                 exit;
             }
             
-            throw new PDOException("Database connection failed: " . $e->getMessage(), (int)$e->getCode());
+            throw new Exception("MongoDB connection failed: " . $e->getMessage());
         }
     }
     
-    return $pdo;
+    return $mongodb;
+}
+
+// MongoDB Helper Functions
+function insertDocument($collection, $document) {
+    $db = getDatabase();
+    $result = $db->selectCollection($collection)->insertOne($document);
+    return $result->getInsertedId();
+}
+
+function findDocument($collection, $filter = [], $options = []) {
+    $db = getDatabase();
+    return $db->selectCollection($collection)->findOne($filter, $options);
+}
+
+function findDocuments($collection, $filter = [], $options = []) {
+    $db = getDatabase();
+    return $db->selectCollection($collection)->find($filter, $options)->toArray();
+}
+
+function updateDocument($collection, $filter, $update, $options = []) {
+    $db = getDatabase();
+    return $db->selectCollection($collection)->updateOne($filter, $update, $options);
+}
+
+function deleteDocument($collection, $filter) {
+    $db = getDatabase();
+    return $db->selectCollection($collection)->deleteOne($filter);
+}
+
+function showMongoDBSetupInstructions() {
+    ?>
+    <!DOCTYPE html>
+    <html lang="id">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>MongoDB Atlas Setup Required - Orior QR System</title>
+        <script src="https://cdn.tailwindcss.com"></script>
+    </head>
+    <body class="bg-gradient-to-br from-green-500 to-blue-600 min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8">
+            <div class="text-center mb-8">
+                <div class="text-6xl mb-4">🍃</div>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">MongoDB Atlas Setup Required</h1>
+                <p class="text-gray-600">Your Orior QR System needs MongoDB Atlas connection.</p>
+            </div>
+            
+            <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
+                <div class="flex">
+                    <div class="text-yellow-400 text-xl mr-3">⚠️</div>
+                    <div>
+                        <h3 class="text-yellow-800 font-semibold">MongoDB Not Connected</h3>
+                        <p class="text-yellow-700 text-sm">Please set up MongoDB Atlas and environment variables.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-6">
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🚀 Quick Setup Steps:</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-start">
+                            <span class="bg-green-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">1</span>
+                            <div>
+                                <p class="font-medium">Setup MongoDB Atlas</p>
+                                <p class="text-sm text-gray-600">Create free cluster at mongodb.com/cloud/atlas</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="bg-green-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">2</span>
+                            <div>
+                                <p class="font-medium">Get Connection String</p>
+                                <p class="text-sm text-gray-600">Copy MongoDB URI from Atlas dashboard</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <span class="bg-green-500 text-white text-xs rounded-full w-6 h-6 flex items-center justify-center mr-3 mt-0.5">3</span>
+                            <div>
+                                <p class="font-medium">Set Environment Variables</p>
+                                <p class="text-sm text-gray-600">Add MongoDB URI to Vercel environment</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-gray-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-gray-800 mb-4">🔧 Required Environment Variables:</h3>
+                    <div class="bg-gray-800 text-green-400 p-4 rounded-lg font-mono text-sm">
+                        <div>MONGODB_URI=mongodb+srv://username:password@cluster0.xxxxx.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0</div>
+                        <div>DB_NAME=validasi_barang</div>
+                    </div>
+                </div>
+
+                <div class="bg-green-50 rounded-lg p-6">
+                    <h3 class="text-lg font-semibold text-green-800 mb-4">🍃 MongoDB Atlas Benefits:</h3>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <h4 class="font-semibold">✅ Free Tier</h4>
+                            <p class="text-sm text-gray-600">512MB storage gratis</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">🌍 Global</h4>
+                            <p class="text-sm text-gray-600">Multi-region deployment</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">🔒 Secure</h4>
+                            <p class="text-sm text-gray-600">Built-in security</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold">📊 Analytics</h4>
+                            <p class="text-sm text-gray-600">Performance insights</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center pt-4">
+                    <p class="text-gray-500 text-sm">
+                        Get started at <strong>mongodb.com/cloud/atlas</strong>
+                    </p>
+                    <div class="mt-4 space-x-4">
+                        <a href="https://mongodb.com/cloud/atlas" target="_blank" 
+                           class="inline-block bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 transition">
+                            🍃 Get MongoDB Atlas
+                        </a>
+                        <button onclick="location.reload()" 
+                                class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+                            🔄 Retry Connection
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </body>
+    </html>
+    <?php
 }
 
 function showDatabaseSetupInstructions() {
@@ -667,13 +806,11 @@ function renderAdminLogin() {
         
         if ($username && $password) {
             try {
-                // Check user credentials
-                $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ? LIMIT 1');
-                $stmt->execute([$username]);
-                $user = $stmt->fetch(PDO::FETCH_ASSOC);
+                // Check user credentials in MongoDB
+                $user = findDocument('users', ['username' => $username]);
                 
-                if ($user && password_verify($password, $user['password_hash'])) {
-                    $_SESSION['admin_id'] = $user['id'];
+                if ($user && password_verify($password, $user['password'])) {
+                    $_SESSION['admin_id'] = (string)$user['_id'];
                     $_SESSION['admin_username'] = $user['username'];
                     header('Location: /admin/admin_dashboard.php');
                     exit;
@@ -756,19 +893,24 @@ function renderAdminDashboard() {
         exit;
     }
 
-    // Database connection - Production mode
-    $pdo = getDatabase();
+    // Database connection - Production mode  
+    $db = getDatabase();
 
     try {
-        // Get products count
-        $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
-        $stmt->execute();
-        $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+        // Get products count from MongoDB
+        $productCount = $db->selectCollection('products')->countDocuments([]);
 
-        // Get recent products
-        $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
-        $stmt->execute();
-        $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        // Get recent products from MongoDB
+        $recentProducts = $db->selectCollection('products')->find(
+            [], 
+            ['sort' => ['created_at' => -1], 'limit' => 10]
+        )->toArray();
+        
+        // Convert MongoDB objects to arrays for compatibility
+        foreach ($recentProducts as &$product) {
+            $product['id'] = (string)$product['_id'];
+            unset($product['_id']);
+        }
     } catch (Exception $e) {
         $productCount = 0;
         $recentProducts = [];
