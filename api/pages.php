@@ -838,8 +838,16 @@ function renderAddProduct() {
             $qrData = 'ORIOR_' . strtoupper(uniqid()) . '_' . time();
             
             if ($pdo === null) {
-                // Demo mode - just show success message
-                $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData . ' (Demo Mode - tidak tersimpan ke database)';
+                // Demo mode - generate QR code for display
+                $qrCodeUrl = "https://qr-server.com/api/v1/create-qr-code/?size=200x200&data=" . urlencode($qrData);
+                $success = 'Produk berhasil ditambahkan! (Demo Mode - tidak tersimpan ke database)';
+                $generatedQR = [
+                    'qr_data' => $qrData,
+                    'qr_url' => $qrCodeUrl,
+                    'name' => $name,
+                    'category' => $category,
+                    'description' => $description
+                ];
                 // Clear form
                 $name = $category = $description = '';
             } else {
@@ -848,7 +856,16 @@ function renderAddProduct() {
                     $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
                     $stmt->execute([$name, $category, $description, $qrData]);
                     
-                    $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData;
+                    // Generate QR code URL
+                    $qrCodeUrl = "https://qr-server.com/api/v1/create-qr-code/?size=200x200&data=" . urlencode($qrData);
+                    $success = 'Produk berhasil ditambahkan dan tersimpan ke database!';
+                    $generatedQR = [
+                        'qr_data' => $qrData,
+                        'qr_url' => $qrCodeUrl,
+                        'name' => $name,
+                        'category' => $category,
+                        'description' => $description
+                    ];
                     
                     // Clear form
                     $name = $category = $description = '';
@@ -886,8 +903,55 @@ function renderAddProduct() {
     </nav>
 
     <div class="container mx-auto p-6 max-w-2xl">
+        <?php if (isset($generatedQR)): ?>
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="text-center">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+                    <h3 class="text-lg font-bold text-green-800 mb-2">🎉 QR Code Berhasil Dibuat!</h3>
+                    <div class="grid md:grid-cols-2 gap-4 items-center">
+                        <div class="text-left text-sm text-green-700">
+                            <p><strong>Nama:</strong> <?= htmlspecialchars($generatedQR['name']) ?></p>
+                            <p><strong>Kategori:</strong> <?= htmlspecialchars($generatedQR['category']) ?></p>
+                            <p><strong>QR Code:</strong> <span class="font-mono"><?= htmlspecialchars($generatedQR['qr_data']) ?></span></p>
+                            <?php if ($pdo === null): ?>
+                            <p class="text-yellow-600 font-semibold mt-2">⚠️ Demo Mode: Data tidak tersimpan</p>
+                            <?php endif; ?>
+                        </div>
+                        <div class="text-center">
+                            <img src="<?= htmlspecialchars($generatedQR['qr_url']) ?>" 
+                                 alt="QR Code" 
+                                 class="mx-auto border-2 border-gray-300 rounded-lg shadow-md">
+                            <div class="mt-2 space-x-2">
+                                <a href="<?= htmlspecialchars($generatedQR['qr_url']) ?>" 
+                                   target="_blank" 
+                                   class="inline-block bg-blue-500 text-white px-3 py-1 rounded text-xs hover:bg-blue-600">
+                                    📥 Download
+                                </a>
+                                <button onclick="copyQRData('<?= htmlspecialchars($generatedQR['qr_data']) ?>')" 
+                                        class="bg-gray-500 text-white px-3 py-1 rounded text-xs hover:bg-gray-600">
+                                    📋 Copy
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center space-x-4">
+                    <a href="/scan" 
+                       class="bg-green-600 text-white px-6 py-2 rounded-lg hover:bg-green-700 font-medium">
+                        🔍 Test QR Code
+                    </a>
+                    <button onclick="location.reload()" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 font-medium">
+                        ➕ Tambah Lagi
+                    </button>
+                </div>
+            </div>
+        </div>
+        <?php endif; ?>
+        
         <div class="bg-white rounded-lg shadow p-6">
-            <?php if ($success): ?>
+            <?php if ($success && !isset($generatedQR)): ?>
             <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                 <div class="flex items-center">
                     <span class="mr-2">✅</span>
@@ -949,6 +1013,26 @@ function renderAddProduct() {
             </form>
         </div>
     </div>
+
+    <script>
+        function copyQRData(qrData) {
+            navigator.clipboard.writeText(qrData).then(function() {
+                // Create temporary notification
+                const notification = document.createElement('div');
+                notification.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+                notification.textContent = '✅ QR Code copied to clipboard!';
+                document.body.appendChild(notification);
+                
+                // Remove notification after 3 seconds
+                setTimeout(function() {
+                    document.body.removeChild(notification);
+                }, 3000);
+            }).catch(function(err) {
+                alert('Failed to copy QR code: ' + qrData);
+                console.error('Could not copy text: ', err);
+            });
+        }
+    </script>
 </body>
 </html>
 <?php
