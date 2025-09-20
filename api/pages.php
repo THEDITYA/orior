@@ -650,15 +650,48 @@ function renderAdminDashboard() {
     // Database connection - Vercel compatible (inline)
     $pdo = getDatabase();
 
-    // Get products count
-    $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
-    $stmt->execute();
-    $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+    // Mock data if DB not available
+    if ($pdo === null) {
+        $productCount = 3; // Mock count
+        $recentProducts = [
+            [
+                'id' => 1,
+                'name' => 'iPhone 15 Pro (Demo)',
+                'category' => 'Elektronik',
+                'qr_data' => 'ORIOR_DEMO1',
+                'created_at' => date('Y-m-d H:i:s', time() - 3600)
+            ],
+            [
+                'id' => 2,
+                'name' => 'Nike Air Max (Demo)',
+                'category' => 'Fashion',
+                'qr_data' => 'ORIOR_DEMO2',
+                'created_at' => date('Y-m-d H:i:s', time() - 7200)
+            ],
+            [
+                'id' => 3,
+                'name' => 'Samsung Galaxy S24 (Demo)',
+                'category' => 'Elektronik',
+                'qr_data' => 'ORIOR_DEMO3',
+                'created_at' => date('Y-m-d H:i:s', time() - 10800)
+            ]
+        ];
+    } else {
+        // Real database queries
+        try {
+            $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
+            $stmt->execute();
+            $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
 
-    // Get recent products
-    $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
-    $stmt->execute();
-    $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
+            $stmt->execute();
+            $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Exception $e) {
+            // Fallback to mock data on error
+            $productCount = 0;
+            $recentProducts = [];
+        }
+    }
 ?>
 <!DOCTYPE html>
 <html lang="id">
@@ -671,7 +704,12 @@ function renderAdminDashboard() {
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">📊 Dashboard Admin</h1>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-bold">📊 Dashboard Admin</h1>
+                <?php if ($pdo === null): ?>
+                <span class="bg-yellow-500 text-yellow-900 px-2 py-1 rounded text-xs font-bold">DEMO MODE</span>
+                <?php endif; ?>
+            </div>
             <div class="space-x-4">
                 <span>Welcome, <?= htmlspecialchars($_SESSION['admin_username']) ?>!</span>
                 <a href="?logout=1" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600">Logout</a>
@@ -796,20 +834,27 @@ function renderAddProduct() {
         $description = trim($_POST['description'] ?? '');
         
         if ($name && $category) {
-            try {
-                // Generate unique QR data
-                $qrData = 'ORIOR_' . strtoupper(uniqid()) . '_' . time();
-                
-                // Insert into database
-                $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
-                $stmt->execute([$name, $category, $description, $qrData]);
-                
-                $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData;
-                
+            // Generate unique QR data
+            $qrData = 'ORIOR_' . strtoupper(uniqid()) . '_' . time();
+            
+            if ($pdo === null) {
+                // Demo mode - just show success message
+                $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData . ' (Demo Mode - tidak tersimpan ke database)';
                 // Clear form
                 $name = $category = $description = '';
-            } catch (Exception $e) {
-                $error = 'Terjadi kesalahan: ' . $e->getMessage();
+            } else {
+                // Real database insert
+                try {
+                    $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
+                    $stmt->execute([$name, $category, $description, $qrData]);
+                    
+                    $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData;
+                    
+                    // Clear form
+                    $name = $category = $description = '';
+                } catch (Exception $e) {
+                    $error = 'Terjadi kesalahan: ' . $e->getMessage();
+                }
             }
         } else {
             $error = 'Nama produk dan kategori harus diisi!';
@@ -827,7 +872,12 @@ function renderAddProduct() {
 <body class="bg-gray-100 min-h-screen">
     <nav class="bg-blue-600 text-white p-4">
         <div class="container mx-auto flex justify-between items-center">
-            <h1 class="text-xl font-bold">📦 Tambah Produk</h1>
+            <div class="flex items-center space-x-3">
+                <h1 class="text-xl font-bold">📦 Tambah Produk</h1>
+                <?php if ($pdo === null): ?>
+                <span class="bg-yellow-500 text-yellow-900 px-2 py-1 rounded text-xs font-bold">DEMO MODE</span>
+                <?php endif; ?>
+            </div>
             <div class="space-x-4">
                 <a href="/admin/admin_dashboard.php" class="hover:underline">← Dashboard</a>
                 <span><?= htmlspecialchars($_SESSION['admin_username']) ?></span>
