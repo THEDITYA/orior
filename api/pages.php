@@ -11,6 +11,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit();
 }
 
+// Inline Database Configuration for Vercel
+function getDatabase() {
+    static $pdo = null;
+    
+    if ($pdo === null) {
+        // Environment variables dengan fallback ke nilai lokal
+        $host = $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: 'localhost';
+        $dbname = $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?: 'validasi_barang';
+        $username = $_ENV['DB_USER'] ?? getenv('DB_USER') ?: 'root';
+        $password = $_ENV['DB_PASSWORD'] ?? getenv('DB_PASSWORD') ?: '';
+        
+        $charset = 'utf8mb4';
+        $dsn = "mysql:host={$host};dbname={$dbname};charset={$charset}";
+        
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+        ];
+        
+        try {
+            $pdo = new PDO($dsn, $username, $password, $options);
+        } catch (PDOException $e) {
+            throw new PDOException($e->getMessage(), (int)$e->getCode());
+        }
+    }
+    
+    return $pdo;
+}
+
 // Get page parameter
 $page = $_GET['page'] ?? 'index';
 $subpage = $_GET['subpage'] ?? '';
@@ -233,8 +264,7 @@ function renderAdminPage($subpage) {
 function renderAdminLogin() {
     session_start();
 
-    // Database connection - Vercel compatible
-    require_once '../config/database.php';
+    // Database connection - Vercel compatible (inline)
     $pdo = getDatabase();
 
     // Check if already logged in
@@ -336,8 +366,7 @@ function renderAdminDashboard() {
         exit;
     }
 
-    // Database connection - Vercel compatible
-    require_once '../config/database.php';
+    // Database connection - Vercel compatible (inline)
     $pdo = getDatabase();
 
     // Get products count
@@ -474,8 +503,7 @@ function renderAddProduct() {
         exit;
     }
 
-    // Database connection - Vercel compatible
-    require_once '../config/database.php';
+    // Database connection - Vercel compatible (inline)
     $pdo = getDatabase();
 
     $success = '';

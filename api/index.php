@@ -14,6 +14,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     exit(0);
 }
 
+// Inline Database Configuration for Vercel
+function getDatabase() {
+    static $pdo = null;
+    
+    if ($pdo === null) {
+        // Environment variables dengan fallback ke nilai lokal
+        $host = $_ENV['DB_HOST'] ?? getenv('DB_HOST') ?: 'localhost';
+        $dbname = $_ENV['DB_NAME'] ?? getenv('DB_NAME') ?: 'validasi_barang';
+        $username = $_ENV['DB_USER'] ?? getenv('DB_USER') ?: 'root';
+        $password = $_ENV['DB_PASSWORD'] ?? getenv('DB_PASSWORD') ?: '';
+        
+        $charset = 'utf8mb4';
+        $dsn = "mysql:host={$host};dbname={$dbname};charset={$charset}";
+        
+        $options = [
+            PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+            PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT => false,
+        ];
+        
+        try {
+            $pdo = new PDO($dsn, $username, $password, $options);
+        } catch (PDOException $e) {
+            throw new PDOException($e->getMessage(), (int)$e->getCode());
+        }
+    }
+    
+    return $pdo;
+}
+
+// Handle preflight requests
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    exit(0);
+}
+
 // Get the action from URL path or query parameter
 $action = $_GET['action'] ?? 'validate';
 
@@ -33,9 +69,7 @@ switch ($action) {
 }
 
 function handleValidation() {
-    // Database connection
-    require_once __DIR__ . '/../config/database.php';
-
+    // Database connection - inline for Vercel
     try {
         $pdo = getDatabase();
     } catch (Exception $e) {
