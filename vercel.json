@@ -2,7 +2,13 @@
   "version": 2,
   "functions": {
     "*.php": {
-      "runtime": "vercel-php@0.6.0"
+      "runtime": "vercel-php@0.7.4"
+    },
+    "admin/*.php": {
+      "runtime": "vercel-php@0.7.4"
+    },
+    "api/*.php": {
+      "runtime": "vercel-php@0.7.4"
     }
   },
   "routes": [
@@ -12,16 +18,6 @@
     }
   ],
   "env": {
-    "PHP_VERSION": "8.2"
-  },
-  "builds": [
-    {
-      "src": "*.php",
-      "use": "vercel-php"
-    },
-    {
-      "src": "admin/*.php",
-      "use": "vercel-php"
-    }
-  ]
+    "PHP_VERSION": "8.3"
+  }
 }

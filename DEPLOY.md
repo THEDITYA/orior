@@ -7,6 +7,17 @@ Panduan lengkap untuk deploy sistem validasi QR code ke Vercel dengan database c
 - [x] Account Vercel (gratis di [vercel.com](https://vercel.com))
 - [x] Database MySQL cloud (PlanetScale, Railway, atau Aiven)
 - [x] Git repository (GitHub, GitLab, atau Bitbucket)
+- [x] PHP 8.3 compatible code (vercel-php@0.7.4)
+
+## 🐘 PHP Runtime Info
+
+- **Runtime Version**: `vercel-php@0.7.4`
+- **PHP Version**: 8.3.x
+- **Node.js**: 22.x (latest)
+- **Memory Limit**: ~90MB
+- **Cold Start**: ~250ms
+- **Warm Start**: ~5ms
+- **Extensions**: mysqli, pdo_mysql, curl, json, mbstring, openssl, dan 50+ lainnya
 
 ## 🗄️ Setup Database Cloud
 
@@ -112,7 +123,13 @@ APP_DEBUG=false
   "version": 2,
   "functions": {
     "*.php": {
-      "runtime": "vercel-php@0.6.0"
+      "runtime": "vercel-php@0.7.4"
+    },
+    "admin/*.php": {
+      "runtime": "vercel-php@0.7.4"
+    },
+    "api/*.php": {
+      "runtime": "vercel-php@0.7.4"
     }
   },
   "routes": [
@@ -161,19 +178,45 @@ APP_ENV=production
 
 ## 🐛 Troubleshooting
 
+### Runtime Version Errors
+**Error**: `The Runtime "vercel-php@0.x.x" is using "nodejs14.x", which is discontinued`
+
+**Solution**: 
+1. Update `vercel.json` dengan versi terbaru:
+```json
+{
+  "functions": {
+    "*.php": {
+      "runtime": "vercel-php@0.7.4"
+    }
+  }
+}
+```
+
+2. **Available Versions**:
+- `vercel-php@0.7.4` - PHP 8.3.x + Node.js 22.x ✅ **Recommended**
+- `vercel-php@0.6.2` - PHP 8.2.x + Node.js autodetect
+- `vercel-php@0.5.5` - PHP 8.1.x + Node.js autodetect
+
 ### Database Connection Error
-1. **Check environment variables** di Vercel
+1. **Check environment variables** di Vercel Dashboard
 2. **Test connection string** secara manual
-3. **Verify SSL settings** untuk database
+3. **Verify SSL settings** untuk database cloud
+4. **Check firewall rules** di database provider
+
+### Memory Limits
+**Error**: Memory exhausted  
+**Solution**: Optimize queries dan gunakan pagination
+
+### Cold Starts
+- **Normal**: ~250ms untuk cold start
+- **Optimization**: Gunakan connection pooling
+- **Caching**: Implement Redis jika diperlukan
 
 ### Session Issues
 1. **Set SESSION_SECRET** di environment variables
 2. **Check PHP session** configuration
-
-### File Upload (QR Codes)
-- Vercel **read-only filesystem**
-- QR codes disimpan sementara
-- Consider using **cloud storage** (AWS S3, Cloudinary)
+3. **Verify secure cookie settings**
 
 ## 🔄 Auto Deployment
 
