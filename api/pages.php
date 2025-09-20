@@ -231,17 +231,367 @@ function renderAdminPage($subpage) {
 }
 
 function renderAdminLogin() {
-    // Include the admin login content from public/admin/admin_login.php
-    include '../public/admin/admin_login.php';
+    session_start();
+
+    // Database connection - Vercel compatible
+    require_once '../config/database.php';
+    $pdo = getDatabase();
+
+    // Check if already logged in
+    if (isset($_SESSION['admin_id'])) {
+        header('Location: /admin/admin_dashboard.php');
+        exit;
+    }
+
+    $error = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $username = trim($_POST['username'] ?? '');
+        $password = $_POST['password'] ?? '';
+        
+        if ($username && $password) {
+            // Check user credentials
+            $stmt = $pdo->prepare('SELECT * FROM users WHERE username = ? LIMIT 1');
+            $stmt->execute([$username]);
+            $user = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($user && password_verify($password, $user['password_hash'])) {
+                $_SESSION['admin_id'] = $user['id'];
+                $_SESSION['admin_username'] = $user['username'];
+                header('Location: /admin/admin_dashboard.php');
+                exit;
+            } else {
+                $error = 'Username atau password salah!';
+            }
+        } else {
+            $error = 'Username dan password harus diisi!';
+        }
+    }
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login Admin - Validasi Barang</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center">
+    <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800 mb-2">🔐 Login Admin</h1>
+            <p class="text-gray-600">Sistem Validasi Barang</p>
+        </div>
+
+        <?php if ($error): ?>
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <?= htmlspecialchars($error) ?>
+        </div>
+        <?php endif; ?>
+
+        <form method="POST">
+            <div class="mb-4">
+                <label for="username" class="block text-gray-700 text-sm font-bold mb-2">
+                    Username
+                </label>
+                <input type="text" id="username" name="username" 
+                       class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" 
+                       required autofocus>
+            </div>
+
+            <div class="mb-6">
+                <label for="password" class="block text-gray-700 text-sm font-bold mb-2">
+                    Password
+                </label>
+                <input type="password" id="password" name="password" 
+                       class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" 
+                       required>
+            </div>
+
+            <button type="submit" 
+                    class="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 focus:outline-none">
+                Login
+            </button>
+        </form>
+
+        <div class="text-center mt-6">
+            <a href="/scan" class="text-blue-600 hover:underline">← Kembali ke Scanner</a>
+        </div>
+
+        <div class="text-center mt-4 text-sm text-gray-500">
+            Default: admin / admin123
+        </div>
+    </div>
+</body>
+</html>
+<?php
 }
 
 function renderAdminDashboard() {
-    // Include admin dashboard logic
-    include '../public/admin/admin_dashboard.php';
+    session_start();
+
+    // Check if user is logged in
+    if (!isset($_SESSION['admin_id'])) {
+        header('Location: /admin/admin_login.php');
+        exit;
+    }
+
+    // Database connection - Vercel compatible
+    require_once '../config/database.php';
+    $pdo = getDatabase();
+
+    // Get products count
+    $stmt = $pdo->prepare('SELECT COUNT(*) as total FROM products');
+    $stmt->execute();
+    $productCount = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
+
+    // Get recent products
+    $stmt = $pdo->prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT 10');
+    $stmt->execute();
+    $recentProducts = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Admin - Validasi Barang</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">📊 Dashboard Admin</h1>
+            <div class="space-x-4">
+                <span>Welcome, <?= htmlspecialchars($_SESSION['admin_username']) ?>!</span>
+                <a href="?logout=1" class="bg-red-500 px-3 py-1 rounded hover:bg-red-600">Logout</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">📦</div>
+                    <div>
+                        <h3 class="text-lg font-semibold">Total Produk</h3>
+                        <p class="text-2xl font-bold text-blue-600"><?= $productCount ?></p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">✅</div>
+                    <div>
+                        <h3 class="text-lg font-semibold">Status</h3>
+                        <p class="text-lg font-bold text-green-600">Aktif</p>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white p-6 rounded-lg shadow">
+                <div class="flex items-center">
+                    <div class="text-3xl mr-4">🔐</div>
+                    <div>
+                        <h3 class="text-lg font-semibold">Keamanan</h3>
+                        <p class="text-lg font-bold text-green-600">Tinggi</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Kelola Produk</h2>
+                <a href="/admin/add_product.php" class="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700">
+                    + Tambah Produk
+                </a>
+            </div>
+            
+            <?php if (empty($recentProducts)): ?>
+                <div class="text-center py-8 text-gray-500">
+                    <div class="text-4xl mb-2">📭</div>
+                    <p>Belum ada produk yang terdaftar</p>
+                    <a href="/admin/add_product.php" class="text-blue-600 hover:underline">Tambah produk pertama</a>
+                </div>
+            <?php else: ?>
+                <div class="overflow-x-auto">
+                    <table class="w-full table-auto">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-2 text-left">ID</th>
+                                <th class="px-4 py-2 text-left">Nama Produk</th>
+                                <th class="px-4 py-2 text-left">Kategori</th>
+                                <th class="px-4 py-2 text-left">QR Code</th>
+                                <th class="px-4 py-2 text-left">Tanggal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            <?php foreach ($recentProducts as $product): ?>
+                            <tr>
+                                <td class="px-4 py-2">#<?= $product['id'] ?></td>
+                                <td class="px-4 py-2 font-medium"><?= htmlspecialchars($product['name']) ?></td>
+                                <td class="px-4 py-2"><?= htmlspecialchars($product['category']) ?></td>
+                                <td class="px-4 py-2">
+                                    <span class="bg-green-100 text-green-800 px-2 py-1 rounded text-sm">
+                                        ✓ Generated
+                                    </span>
+                                </td>
+                                <td class="px-4 py-2 text-sm text-gray-500">
+                                    <?= date('d/m/Y H:i', strtotime($product['created_at'])) ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            <?php endif; ?>
+        </div>
+
+        <div class="text-center">
+            <a href="/" class="text-blue-600 hover:underline">← Kembali ke Beranda</a>
+        </div>
+    </div>
+</body>
+</html>
+<?php
+    // Handle logout
+    if (isset($_GET['logout'])) {
+        session_destroy();
+        header('Location: /admin/admin_login.php');
+        exit;
+    }
 }
 
 function renderAddProduct() {
-    // Include add product logic
-    include '../public/admin/add_product.php';
+    session_start();
+
+    // Check if user is logged in
+    if (!isset($_SESSION['admin_id'])) {
+        header('Location: /admin/admin_login.php');
+        exit;
+    }
+
+    // Database connection - Vercel compatible
+    require_once '../config/database.php';
+    $pdo = getDatabase();
+
+    $success = '';
+    $error = '';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $name = trim($_POST['name'] ?? '');
+        $category = trim($_POST['category'] ?? '');
+        $description = trim($_POST['description'] ?? '');
+        
+        if ($name && $category) {
+            try {
+                // Generate unique QR data
+                $qrData = 'ORIOR_' . strtoupper(uniqid()) . '_' . time();
+                
+                // Insert into database
+                $stmt = $pdo->prepare('INSERT INTO products (name, category, description, qr_data) VALUES (?, ?, ?, ?)');
+                $stmt->execute([$name, $category, $description, $qrData]);
+                
+                $success = 'Produk berhasil ditambahkan dengan QR Code: ' . $qrData;
+                
+                // Clear form
+                $name = $category = $description = '';
+            } catch (Exception $e) {
+                $error = 'Terjadi kesalahan: ' . $e->getMessage();
+            }
+        } else {
+            $error = 'Nama produk dan kategori harus diisi!';
+        }
+    }
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tambah Produk - Admin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <nav class="bg-blue-600 text-white p-4">
+        <div class="container mx-auto flex justify-between items-center">
+            <h1 class="text-xl font-bold">📦 Tambah Produk</h1>
+            <div class="space-x-4">
+                <a href="/admin/admin_dashboard.php" class="hover:underline">← Dashboard</a>
+                <span><?= htmlspecialchars($_SESSION['admin_username']) ?></span>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-6 max-w-2xl">
+        <div class="bg-white rounded-lg shadow p-6">
+            <?php if ($success): ?>
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                <div class="flex items-center">
+                    <span class="mr-2">✅</span>
+                    <?= htmlspecialchars($success) ?>
+                </div>
+            </div>
+            <?php endif; ?>
+
+            <?php if ($error): ?>
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+                <?= htmlspecialchars($error) ?>
+            </div>
+            <?php endif; ?>
+
+            <form method="POST" class="space-y-4">
+                <div>
+                    <label for="name" class="block text-gray-700 text-sm font-bold mb-2">
+                        Nama Produk *
+                    </label>
+                    <input type="text" id="name" name="name" value="<?= htmlspecialchars($name ?? '') ?>"
+                           class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" 
+                           required>
+                </div>
+
+                <div>
+                    <label for="category" class="block text-gray-700 text-sm font-bold mb-2">
+                        Kategori *
+                    </label>
+                    <select id="category" name="category" 
+                            class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500" 
+                            required>
+                        <option value="">Pilih kategori...</option>
+                        <option value="Elektronik" <?= ($category ?? '') === 'Elektronik' ? 'selected' : '' ?>>Elektronik</option>
+                        <option value="Fashion" <?= ($category ?? '') === 'Fashion' ? 'selected' : '' ?>>Fashion</option>
+                        <option value="Makanan" <?= ($category ?? '') === 'Makanan' ? 'selected' : '' ?>>Makanan</option>
+                        <option value="Kesehatan" <?= ($category ?? '') === 'Kesehatan' ? 'selected' : '' ?>>Kesehatan</option>
+                        <option value="Lainnya" <?= ($category ?? '') === 'Lainnya' ? 'selected' : '' ?>>Lainnya</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label for="description" class="block text-gray-700 text-sm font-bold mb-2">
+                        Deskripsi
+                    </label>
+                    <textarea id="description" name="description" rows="4"
+                              class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:border-blue-500"><?= htmlspecialchars($description ?? '') ?></textarea>
+                </div>
+
+                <div class="flex justify-between">
+                    <a href="/admin/admin_dashboard.php" 
+                       class="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600">
+                        ← Kembali
+                    </a>
+                    <button type="submit" 
+                            class="bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700">
+                        💾 Simpan Produk
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
+<?php
 }
 ?>
